@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 4 章：工具与实践 — 深度技术指南</title>
+<link rel="stylesheet" href="assets/base-dark.css">
+<style>
+:root {
+  --c1:#58a6ff; --c1d:#1f6feb;
+  --c2:#3fb950; --c2d:#238636;
+  --c3:#d2a8ff; --c3d:#8250df;
+  --c4:#f0883e; --c4d:#d6680c;
+  --red:#f85149;
+}
+.hero h1 em { background:linear-gradient(135deg, var(--c4), var(--c2)); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="nav-brand" href="index.html">📖 代码分析指南 <span>· Code Analysis Guide</span></a>
+    <a class="nl" href="index.html">← 首页</a>
+    <a class="nl" href="#s1">工具矩阵</a>
+    <a class="nl" href="#s2">CI/CD</a>
+    <a class="nl" href="#s3">实战</a>
+    <a class="nl" href="#s4">自定义</a>
+    <a class="nl" href="#s5">最佳实践</a>
+  </div>
+</nav>
+
+<div class="page">
+
+<section class="hero">
+  <div class="hero-badge"><span class="dot"></span>Chapter 4 · 工程实践</div>
+  <h1>第 4 章<br><em>工具与实践</em></h1>
+  <p>从理论到落地——50+ 工具的全景对比、CI/CD 分层质量门禁架构、ESLint/Semgrep/CodeQL 的实战规则编写，以及使用 tree-sitter 和 TypeScript Compiler API 构建自定义分析工具的完整指南。</p>
+  <div class="tag-row">
+    <span class="ltag" style="color:var(--c1);border-color:rgba(88,166,255,.3);background:rgba(88,166,255,.08)">Tools</span>
+    <span class="ltag" style="color:var(--c2);border-color:rgba(63,185,80,.3);background:rgba(63,185,80,.08)">CI/CD</span>
+    <span class="ltag" style="color:var(--c3);border-color:rgba(210,168,255,.3);background:rgba(210,168,255,.08)">Custom Rules</span>
+    <span class="ltag" style="color:var(--c4);border-color:rgba(240,136,62,.3);background:rgba(240,136,62,.08)">Best Practices</span>
+  </div>
+</section>
+
+<div class="flow">
+  <div class="sec-label">Quality Gate Architecture</div>
+  <div class="flow-track">
+    <div class="flow-box" style="border-color:rgba(88,166,255,.25)">
+      <div class="fb-tag" style="color:var(--c1)">Layer 0</div>
+      <div class="fb-name">Pre-commit (秒级)</div>
+      <div class="fb-sub">本地快速检查</div>
+      <div class="fb-file">lint-staged · Prettier · Ruff<br>仅检查变更文件</div>
+    </div>
+    <div class="flow-arrow"><span class="arr-icon">→</span><span class="arr-text">本地</span></div>
+    <div class="flow-box" style="border-color:rgba(63,185,80,.25)">
+      <div class="fb-tag" style="color:var(--c2)">Layer 1</div>
+      <div class="fb-name">PR Check (分钟级)</div>
+      <div class="fb-sub">CI 自动检查</div>
+      <div class="fb-file">类型检查 · 完整 Lint<br>Semgrep · 单元测试</div>
+    </div>
+    <div class="flow-arrow"><span class="arr-icon">→</span><span class="arr-text">CI</span></div>
+    <div class="flow-box" style="border-color:rgba(210,168,255,.25)">
+      <div class="fb-tag" style="color:var(--c3)">Layer 2</div>
+      <div class="fb-name">Merge Gate (分钟级)</div>
+      <div class="fb-sub">深度扫描</div>
+      <div class="fb-file">CodeQL · 集成测试<br>覆盖率阈值 · 依赖安全</div>
+    </div>
+    <div class="flow-arrow"><span class="arr-icon">→</span><span class="arr-text">CD</span></div>
+    <div class="flow-box" style="border-color:rgba(240,136,62,.25)">
+      <div class="fb-tag" style="color:var(--c4)">Layer 3</div>
+      <div class="fb-name">Release Gate (小时级)</div>
+      <div class="fb-sub">发布前全量验证</div>
+      <div class="fb-file">SonarQube · E2E · 负载测试<br>SBOM 生成</div>
+    </div>
+  </div>
+</div>
+
+<section class="layer-sec" id="s1">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c1d);color:#cae8ff">4.1</span>
+    <h2 class="layer-title">按语言分类的工具全景<small>JavaScript · Python · Rust · Go · Java</small></h2>
+  </div>
+
+  <div class="codeblock">
+    <div class="cb-head"><span class="cb-dot" style="background:#f85149"></span><span class="cb-dot" style="background:#e3b341"></span><span class="cb-dot" style="background:#28c840"></span>eslint-custom-rule.js · ESLint 自定义规则示例</div>
+    <div class="cb-body"><span class="cm">// 规则: 禁止在 useEffect 中使用 async 函数</span>
+<span class="kw">module</span>.<span class="kw">exports</span> = {
+  <span class="fn">create</span>(<span class="kw">context</span>) {
+    <span class="kw">return</span> {
+      <span class="fn">CallExpression</span>(<span class="kw">node</span>) {
+        <span class="kw">if</span> (<span class="fn">isUseEffectCall</span>(<span class="kw">node</span>)) {
+          <span class="kw">const</span> <span class="kw">callback</span> = <span class="kw">node</span>.<span class="kw">arguments</span>[<span class="num">0</span>];
+          <span class="kw">if</span> (<span class="kw">callback</span>.<span class="kw">type</span> === <span class="str">'ArrowFunctionExpression'</span>
+              && <span class="kw">callback</span>.<span class="kw">async</span> === <span class="kw">true</span>) {
+            <span class="kw">context</span>.<span class="fn">report</span>({
+              <span class="kw">node</span>: <span class="kw">callback</span>,
+              <span class="kw">message</span>: <span class="str">'useEffect 回调不应是 async 函数。'</span>
+            });
+          }
+        }
+      }
+    };
+  }
+};</div>
+  </div>
+
+  <table class="stab">
+    <thead><tr><th>语言</th><th>Linter</th><th>类型检查</th><th>安全</th><th>格式化</th></tr></thead>
+    <tbody>
+      <tr><td style="font-weight:600;color:var(--c1)">JavaScript/TS</td><td>ESLint, Oxlint</td><td>TypeScript, tsc</td><td>Semgrep, CodeQL</td><td>Prettier, Biome</td></tr>
+      <tr><td style="font-weight:600;color:var(--c2)">Python</td><td>Ruff, Pylint</td><td>Mypy, Pyright</td><td>Bandit, Semgrep</td><td>Black, Ruff</td></tr>
+      <tr><td style="font-weight:600;color:var(--c3)">Rust</td><td>Clippy</td><td>rustc (内置)</td><td>cargo-audit</td><td>rustfmt</td></tr>
+      <tr><td style="font-weight:600;color:var(--c4)">Go</td><td>golangci-lint</td><td>go vet</td><td>staticcheck</td><td>gofmt</td></tr>
+      <tr><td>Java</td><td>SpotBugs, PMD</td><td>Error Prone</td><td>SonarQube</td><td>Checkstyle</td></tr>
+    </tbody>
+  </table>
+
+  <div class="card" style="margin-top:20px">
+    <div class="card-title">⚡ 通用多语言工具</div>
+    <ul>
+      <li><strong>tree-sitter</strong>：50+ 语言 AST 解析，增量解析，IDE 友好</li>
+      <li><strong>ast-grep</strong>：10+ 语言 AST 模式匹配，YAML 规则，快速重构</li>
+      <li><strong>Semgrep</strong>：30+ 语言 AST + 数据流，安全审计首选</li>
+      <li><strong>CodeQL</strong>：10+ 语言深度数据流 + 污点分析，GitHub 原生集成</li>
+      <li><strong>SonarQube</strong>：30+ 语言企业级平台，全面质量管理</li>
+    </ul>
+  </div>
+</section>
+
+<section class="layer-sec" id="s2">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c2d);color:#d2f0d0">4.2</span>
+    <h2 class="layer-title">CI/CD 集成最佳实践<small>渐进式引入策略</small></h2>
+  </div>
+
+  <div class="codeblock">
+    <div class="cb-head"><span class="cb-dot" style="background:#f85149"></span><span class="cb-dot" style="background:#e3b341"></span><span class="cb-dot" style="background:#28c840"></span>.github/workflows/quality.yml · GitHub Actions 质量门禁</div>
+    <div class="cb-body"><span class="kw">name</span>: <span class="str">Quality Gate</span>
+<span class="kw">on</span>:
+  <span class="kw">pull_request</span>:
+    <span class="kw">branches</span>: [<span class="str">main</span>]
+
+<span class="kw">jobs</span>:
+  <span class="kw">fast-checks</span>:
+    <span class="kw">strategy</span>:
+      <span class="kw">matrix</span>: { <span class="kw">check</span>: [<span class="str">lint</span>, <span class="str">format</span>, <span class="str">type-check</span>] }
+    <span class="kw">steps</span>:
+      - <span class="kw">uses</span>: <span class="str">actions/checkout@v4</span>
+      - <span class="kw">run</span>: <span class="str">npm ci</span>
+      - <span class="kw">if</span>: <span class="str">matrix.check == 'lint'</span>
+        <span class="kw">run</span>: <span class="str">npx eslint . --max-warnings 0</span>
+      - <span class="kw">if</span>: <span class="str">matrix.check == 'type-check'</span>
+        <span class="kw">run</span>: <span class="str">npx tsc --noEmit</span>
+
+  <span class="kw">deep-analysis</span>:
+    <span class="kw">needs</span>: <span class="str">fast-checks</span>
+    <span class="kw">steps</span>:
+      - <span class="kw">uses</span>: <span class="str">actions/checkout@v4</span>
+      - <span class="kw">uses</span>: <span class="str">github/codeql-action/init@v3</span>
+      - <span class="kw">uses</span>: <span class="str">github/codeql-action/analyze@v3</span>
+      - <span class="kw">uses</span>: <span class="str">semgrep/semgrep-action@v1</span>
+        <span class="kw">with</span>: { <span class="kw">config</span>: <span class="str">p/security-audit</span> }</div>
+  </div>
+
+  <div class="card" style="margin-top:20px">
+    <div class="card-title">🎯 渐进式引入的 4 个阶段</div>
+    <ul>
+      <li><strong>阶段 1 (Week 1-2)：观察</strong>——仅报告不阻断，建立基线，修复关键 HIGH 问题</li>
+      <li><strong>阶段 2 (Week 3-4)：增量阻断</strong>——新代码不允许新增 warning，baseline 抑制存量</li>
+      <li><strong>阶段 3 (Month 2)：全局阻断</strong>——不允许 error，warning 呈下降趋势</li>
+      <li><strong>阶段 4 (Ongoing)：持续优化</strong>——根据误报率调整规则，引入业务自定义规则</li>
+    </ul>
+  </div>
+</section>
+
+<div class="tran-sec">
+  <div class="tran-inner">
+    <span class="tran-pill" style="background:var(--c3d);color:#eddeff">4.2 → 4.3 · 实战</span>
+    <div class="tran-h">配置好工具只是第一步——真正的价值来自定制化规则</div>
+    <div class="tran-p">通用规则覆盖 80% 的场景，但每个团队的代码库都有独特的模式和反模式需要检测。</div>
+  </div>
+</div>
+
+<section class="layer-sec" id="s3">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c3d);color:#eddeff">4.3</span>
+    <h2 class="layer-title">实战案例<small>ESLint · Semgrep · CodeQL · ast-grep</small></h2>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">案例 1: Type-Aware ESLint</div>
+      <ul>
+        <li>检测 <code>as</code> 类型断言绕过类型检查</li>
+        <li>禁止 <code>any</code> 类型</li>
+        <li>强制 <code>optional chaining</code></li>
+        <li>检测未处理的 Promise</li>
+        <li>禁止不安全的成员访问</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">案例 2: Semgrep 安全规则</div>
+      <ul>
+        <li>检测弱哈希算法 (MD5, SHA-1)</li>
+        <li>检测硬编码密钥 (password, api_key)</li>
+        <li>检测不安全的 pickle 反序列化</li>
+        <li>检测 SQL 注入模式</li>
+        <li>跨语言一致的安全策略</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">案例 3: CodeQL 污点追踪</div>
+      <ul>
+        <li>自定义 SQL 注入检测查询</li>
+        <li>追踪用户输入 → SQL 查询的完整路径</li>
+        <li>定义清理器（参数化查询、转义函数）</li>
+        <li>路径问题可视化</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">案例 4: ast-grep 大规模重构</div>
+      <ul>
+        <li>axios → fetch 迁移 (YAML 规则)</li>
+        <li>批量重命名 API</li>
+        <li>统一导入路径</li>
+        <li>自动 fix + 交互式 review</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="layer-sec" id="s4">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c4d);color:#ffe2cc">4.4</span>
+    <h2 class="layer-title">构建自定义分析工具<small>技术选型决策树</small></h2>
+  </div>
+
+  <div class="codeblock">
+    <div class="cb-head"><span class="cb-dot" style="background:#f85149"></span><span class="cb-dot" style="background:#e3b341"></span><span class="cb-dot" style="background:#28c840"></span>decision-tree.txt · 需求 → 工具选择</div>
+    <div class="cb-body"><span class="cm">// 技术选型决策树</span>
+
+需求分析
+    │
+    ├── 简单模式匹配？
+    │   └── <span class="fn">ast-grep</span> (YAML 规则) > Semgrep > 手写
+    │
+    ├── 涉及类型信息？
+    │   └── <span class="fn">TypeScript Compiler API</span> > Babel + TypeScript
+    │
+    ├── 需要数据流分析（过程间）？
+    │   └── <span class="fn">CodeQL</span> > Infer > 自研
+    │
+    ├── 多语言支持？
+    │   └── <span class="fn">tree-sitter</span> (解析) + 自定义代码
+    │
+    ├── 安全漏洞挖掘？
+    │   └── <span class="fn">CodeQL</span> (企业级) > Semgrep Pro > 开源
+    │
+    └── 极致性能？
+        └── <span class="fn">Rust</span> (syn + walker) > Go (go/ast) > Node (babel)</div>
+  </div>
+
+  <div class="grid2" style="margin-top:20px">
+    <div class="card">
+      <div class="card-title">tree-sitter 分析器</div>
+      <ul>
+        <li>初始化 Parser，设置语言</li>
+        <li>解析代码 → S-表达式查询</li>
+        <li>增量解析：只重新解析修改部分</li>
+        <li>跨语言统一的 API</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">TypeScript Compiler API</div>
+      <ul>
+        <li>创建 Program → 获取 TypeChecker</li>
+        <li>遍历 AST：检测 any 类型、非空断言</li>
+        <li>类型感知分析：获取完整类型信息</li>
+        <li>AST 转换：安全代码重构</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="layer-sec" id="s5">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c1d);color:#cae8ff">4.5</span>
+    <h2 class="layer-title">最佳实践清单<small>规则设计 · 团队采用 · 性能优化</small></h2>
+  </div>
+
+  <table class="stab">
+    <thead><tr><th>原则</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td style="color:var(--c1);font-weight:600">低误报率</td><td>误报率 > 10% 时开发者会忽略所有告警</td></tr>
+      <tr><td style="color:var(--c2);font-weight:600">可操作</td><td>每条规则必须能指导开发者如何修复</td></tr>
+      <tr><td style="color:var(--c3);font-weight:600">有文档</td><td>解释"为什么"比"是什么"更重要</td></tr>
+      <tr><td style="color:var(--c4);font-weight:600">可自动修复</td><td>优先选择能 auto-fix 的规则</td></tr>
+      <tr><td>上下文感知</td><td>避免跨文件无上下文的规则</td></tr>
+      <tr><td>可配置</td><td>允许项目级别定制阈值和排除模式</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid2" style="margin-top:20px">
+    <div class="card">
+      <div class="card-title">⚡ 性能优化策略</div>
+      <ul>
+        <li><strong>缓存</strong>：ESLint cache、TS incremental</li>
+        <li><strong>增量分析</strong>：lint-staged，仅分析变更文件</li>
+        <li><strong>并行化</strong>：多 worker 并行执行</li>
+        <li><strong>选更快的工具</strong>：Ruff > Flake8，Oxlint > ESLint</li>
+        <li><strong>分级运行</strong>：快速检查在 PR，慢速在 nightly</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🔮 未来趋势</div>
+      <ul>
+        <li><strong>AI 增强</strong>：ML 模型辅助发现复杂 bug</li>
+        <li><strong>Rust 重写</strong>：Ruff, Oxlint, Biome</li>
+        <li><strong>增量/响应式</strong>：rust-analyzer, LSP 演进</li>
+        <li><strong>供应链安全</strong>：SBOM + 依赖分析</li>
+        <li><strong>统一分析栈</strong>：tree-sitter + ast-grep</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<div class="footer">
+  <p><a href="03-静态分析技术深度剖析.html">← 第 3 章</a> · <a href="index.html">返回首页</a></p>
+  <p style="margin-top:8px"><a href="https://github.com/1998x-stack/code-analysis-guide" style="color:var(--muted)">github.com/1998x-stack/code-analysis-guide</a></p>
+  <p style="margin-top:4px"><a href="05-ast-examples/" style="color:var(--muted)">📂 代码示例（JavaScript / Python / TypeScript）</a></p>
+</div>
+
+</div>
+</body>
+</html>

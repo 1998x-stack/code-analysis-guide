@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 2 章：AST 抽象语法树详解 — 深度技术指南</title>
+<link rel="stylesheet" href="assets/base-dark.css">
+<style>
+:root {
+  --c1:#58a6ff; --c1d:#1f6feb;
+  --c2:#3fb950; --c2d:#238636;
+  --c3:#d2a8ff; --c3d:#8250df;
+  --c4:#f0883e; --c4d:#d6680c;
+}
+.hero h1 em { background:linear-gradient(135deg, var(--c2), var(--c3)); }
+.json-block { font-size:11px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="nav-brand" href="index.html">📖 代码分析指南 <span>· Code Analysis Guide</span></a>
+    <a class="nl" href="index.html">← 首页</a>
+    <a class="nl" href="#s1">概念</a>
+    <a class="nl" href="#s2">流水线</a>
+    <a class="nl" href="#s3">节点类型</a>
+    <a class="nl" href="#s4">遍历</a>
+    <a class="nl" href="#s5">跨语言</a>
+    <a class="nl" href="#s6">应用</a>
+  </div>
+</nav>
+
+<div class="page">
+
+<section class="hero">
+  <div class="hero-badge"><span class="dot"></span>Chapter 2 · 核心技术</div>
+  <h1>第 2 章<br><em>AST 抽象语法树详解</em></h1>
+  <p>深入 AST 的内部工作机制——从词法分析的 Token 流，到语法分析的递归下降算法，再到 Visitor 遍历模式。对比 JavaScript/Python/Go/Rust 的 AST 规范差异，掌握 AST 的核心应用场景。</p>
+  <div class="tag-row">
+    <span class="ltag" style="color:var(--c1);border-color:rgba(88,166,255,.3);background:rgba(88,166,255,.08)">Lexing</span>
+    <span class="ltag" style="color:var(--c2);border-color:rgba(63,185,80,.3);background:rgba(63,185,80,.08)">Parsing</span>
+    <span class="ltag" style="color:var(--c3);border-color:rgba(210,168,255,.3);background:rgba(210,168,255,.08)">Visitor Pattern</span>
+    <span class="ltag" style="color:var(--c4);border-color:rgba(240,136,62,.3);background:rgba(240,136,62,.08)">Cross-Language</span>
+  </div>
+</section>
+
+<div class="flow">
+  <div class="sec-label">Compilation Frontend Pipeline</div>
+  <div class="flow-track">
+    <div class="flow-box" style="border-color:rgba(88,166,255,.25)">
+      <div class="fb-tag" style="color:var(--c1)">词法分析</div>
+      <div class="fb-name">Lexing</div>
+      <div class="fb-sub">源码字符串 → Token 流</div>
+      <div class="fb-file">正则表达式 / DFA / 手动编码<br>输出: [Keyword] [Identifier] [Punctuator] ...</div>
+    </div>
+    <div class="flow-arrow"><span class="arr-icon">→</span><span class="arr-text">Token stream</span></div>
+    <div class="flow-box" style="border-color:rgba(63,185,80,.25)">
+      <div class="fb-tag" style="color:var(--c2)">语法分析</div>
+      <div class="fb-name">Parsing</div>
+      <div class="fb-sub">Token 流 → AST</div>
+      <div class="fb-file">递归下降 / LL(k) / LR(k) / GLR<br>输出: Program → Statement → Expression</div>
+    </div>
+    <div class="flow-arrow"><span class="arr-icon">→</span><span class="arr-text">AST</span></div>
+    <div class="flow-box" style="border-color:rgba(210,168,255,.25)">
+      <div class="fb-tag" style="color:var(--c3)">语义分析</div>
+      <div class="fb-name">Semantic Analysis</div>
+      <div class="fb-sub">AST → 带类型 AST</div>
+      <div class="fb-file">类型检查 / 作用域分析<br>输出: 类型注解、符号表</div>
+    </div>
+    <div class="flow-arrow"><span class="arr-icon">→</span><span class="arr-text">IR</span></div>
+    <div class="flow-box" style="border-color:rgba(240,136,62,.25)">
+      <div class="fb-tag" style="color:var(--c4)">代码生成</div>
+      <div class="fb-name">Code Generation</div>
+      <div class="fb-sub">AST → 目标代码</div>
+      <div class="fb-file">Babel: AST → AST → 代码<br>SWC / esbuild: AST → 代码</div>
+    </div>
+  </div>
+</div>
+
+<section class="layer-sec" id="s1">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c1d);color:#cae8ff">2.1</span>
+    <h2 class="layer-title">什么是 AST？<small>抽象语法树的本质</small></h2>
+  </div>
+  <p class="layer-def" style="border-color:var(--c1)">
+    <strong>AST（Abstract Syntax Tree）</strong>是源代码的树形结构化表示。"抽象"意味着它<strong>省略语法细节</strong>（分号、括号、空格），<strong>只保留程序结构的本质信息</strong>。
+  </p>
+
+  <div class="codeblock">
+    <div class="cb-head"><span class="cb-dot" style="background:#f85149"></span><span class="cb-dot" style="background:#e3b341"></span><span class="cb-dot" style="background:#28c840"></span>cst-vs-ast.txt · 具体语法树 vs 抽象语法树</div>
+    <div class="cb-body"><span class="cm">// 表达式: 3 + 4 * 5</span>
+
+<span class="cm">// CST (Concrete Syntax Tree) — 包含所有语法细节：</span>
+         Expression
+         /    |    \
+     Number  <span class="str">'+'</span>  Expression
+       |          /    |    \
+       <span class="num">3</span>     Number  <span class="str">'*'</span>  Number
+               |            |
+               <span class="num">4</span>            <span class="num">5</span>
+
+<span class="cm">// AST (Abstract Syntax Tree) — 去除冗余语法：</span>
+           <span class="fn">(+)
+</span>          /   \
+         <span class="num">3</span>    <span class="fn">(*)</span>
+              / \
+             <span class="num">4</span>   <span class="num">5</span></div>
+  </div>
+</section>
+
+<section class="layer-sec" id="s2">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c2d);color:#d2f0d0">2.2</span>
+    <h2 class="layer-title">编译前端流水线<small>词法分析与语法分析</small></h2>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">词法分析 (Lexing)</div>
+      <ul>
+        <li>源码 → <strong>Token 流</strong></li>
+        <li>核心技术：正则表达式、DFA、手动编码</li>
+        <li>难点：<strong>歧义消除</strong>（如 JS 中 / 是除法还是正则？）</li>
+        <li>难点：<strong>向前看</strong>（Lookahead）</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">语法分析 (Parsing)</div>
+      <ul>
+        <li>Token 流 → <strong>AST</strong></li>
+        <li>自顶向下：递归下降（最常用）、LL(k)、Packrat</li>
+        <li>自底向上：LR(k)、LALR(1)、GLR、Earley</li>
+        <li><strong>递归下降</strong>是工业界最主流选择</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="codeblock">
+    <div class="cb-head"><span class="cb-dot" style="background:#f85149"></span><span class="cb-dot" style="background:#e3b341"></span><span class="cb-dot" style="background:#28c840"></span>lexing-example.js · 词法分析输出</div>
+    <div class="cb-body"><span class="cm">// 输入: const x = 42 + y;</span>
+<span class="cm">// Token 流:</span>
+[
+  { <span class="kw">type</span>: <span class="str">'Keyword'</span>,    <span class="kw">value</span>: <span class="str">'const'</span>,  <span class="kw">pos</span>: <span class="num">0</span>  },
+  { <span class="kw">type</span>: <span class="str">'Identifier'</span>, <span class="kw">value</span>: <span class="str">'x'</span>,     <span class="kw">pos</span>: <span class="num">6</span>  },
+  { <span class="kw">type</span>: <span class="str">'Punctuator'</span>, <span class="kw">value</span>: <span class="str">'='</span>,     <span class="kw">pos</span>: <span class="num">8</span>  },
+  { <span class="kw">type</span>: <span class="str">'Numeric'</span>,   <span class="kw">value</span>: <span class="str">'42'</span>,    <span class="kw">pos</span>: <span class="num">10</span> },
+  { <span class="kw">type</span>: <span class="str">'Punctuator'</span>, <span class="kw">value</span>: <span class="str">'+'</span>,     <span class="kw">pos</span>: <span class="num">13</span> },
+  { <span class="kw">type</span>: <span class="str">'Identifier'</span>, <span class="kw">value</span>: <span class="str">'y'</span>,     <span class="kw">pos</span>: <span class="num">15</span> },
+  { <span class="kw">type</span>: <span class="str">'Punctuator'</span>, <span class="kw">value</span>: <span class="str">';'</span>,     <span class="kw">pos</span>: <span class="num">16</span> },
+]</div>
+  </div>
+</section>
+
+<section class="layer-sec" id="s3">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c3d);color:#eddeff">2.3</span>
+    <h2 class="layer-title">AST 节点类型体系<small>语句、表达式、声明</small></h2>
+  </div>
+
+  <div class="grid3">
+    <div class="card">
+      <div class="card-title">📝 语句 (Statements)</div>
+      <ul><li>IfStatement, ForStatement</li><li>WhileStatement, SwitchStatement</li><li>ReturnStatement, TryStatement</li><li>BlockStatement</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🧮 表达式 (Expressions)</div>
+      <ul><li>Literal (String, Number, Boolean)</li><li>Identifier, BinaryExpression</li><li>CallExpression</li><li>ArrowFunctionExpression</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">📦 声明 (Declarations)</div>
+      <ul><li>FunctionDeclaration</li><li>ClassDeclaration</li><li>VariableDeclaration</li><li>ImportDeclaration</li></ul>
+    </div>
+  </div>
+
+  <div class="codeblock">
+    <div class="cb-head"><span class="cb-dot" style="background:#f85149"></span><span class="cb-dot" style="background:#e3b341"></span><span class="cb-dot" style="background:#28c840"></span>for-loop-ast.json · for 循环的完整 AST 表示</div>
+    <div class="cb-body"><span class="cm">// 源代码: for (let i = 0; i < 10; i++) { console.log(i); }</span>
+{
+  <span class="str">"type"</span>: <span class="str">"ForStatement"</span>,
+  <span class="str">"init"</span>: {
+    <span class="str">"type"</span>: <span class="str">"VariableDeclaration"</span>, <span class="str">"kind"</span>: <span class="str">"let"</span>,
+    <span class="str">"declarations"</span>: [{ <span class="str">"id"</span>: { <span class="str">"type"</span>: <span class="str">"Identifier"</span>, <span class="str">"name"</span>: <span class="str">"i"</span> },
+                   <span class="str">"init"</span>: { <span class="str">"type"</span>: <span class="str">"NumericLiteral"</span>, <span class="str">"value"</span>: <span class="num">0</span> } }]
+  },
+  <span class="str">"test"</span>: {
+    <span class="str">"type"</span>: <span class="str">"BinaryExpression"</span>, <span class="str">"operator"</span>: <span class="str">"<"</span>,
+    <span class="str">"left"</span>: { <span class="str">"type"</span>: <span class="str">"Identifier"</span>, <span class="str">"name"</span>: <span class="str">"i"</span> },
+    <span class="str">"right"</span>: { <span class="str">"type"</span>: <span class="str">"NumericLiteral"</span>, <span class="str">"value"</span>: <span class="num">10</span> }
+  },
+  <span class="str">"update"</span>: { <span class="str">"type"</span>: <span class="str">"UpdateExpression"</span>, <span class="str">"operator"</span>: <span class="str">"++"</span> },
+  <span class="str">"body"</span>: { <span class="str">"type"</span>: <span class="str">"BlockStatement"</span>,
+    <span class="str">"body"</span>: [{ <span class="str">"type"</span>: <span class="str">"ExpressionStatement"</span>,
+      <span class="str">"expression"</span>: {
+        <span class="str">"type"</span>: <span class="str">"CallExpression"</span>,
+        <span class="str">"callee"</span>: { <span class="str">"type"</span>: <span class="str">"MemberExpression"</span>,
+          <span class="str">"object"</span>: { <span class="str">"name"</span>: <span class="str">"console"</span> },
+          <span class="str">"property"</span>: { <span class="str">"name"</span>: <span class="str">"log"</span> }
+        },
+        <span class="str">"arguments"</span>: [{ <span class="str">"type"</span>: <span class="str">"Identifier"</span>, <span class="str">"name"</span>: <span class="str">"i"</span> }]
+      }
+    }]
+  }
+}</div>
+  </div>
+</section>
+
+<div class="tran-sec">
+  <div class="tran-inner">
+    <span class="tran-pill" style="background:var(--c2d);color:#d2f0d0">2.3 → 2.4 · 核心模式</span>
+    <div class="tran-h">Vistor 模式 — AST 遍历的通用设计模式</div>
+    <div class="tran-p">Enter vs Leave：进入节点时和离开节点时的两个回调时机。深度优先遍历保证子节点在父节点的 Enter/Leave 之间被完全处理。</div>
+  </div>
+</div>
+
+<section class="layer-sec" id="s4">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c4d);color:#ffe2cc">2.4</span>
+    <h2 class="layer-title">Visitor 遍历模式<small>Enter / Leave 与 Path</small></h2>
+  </div>
+
+  <div class="codeblock">
+    <div class="cb-head"><span class="cb-dot" style="background:#f85149"></span><span class="cb-dot" style="background:#e3b341"></span><span class="cb-dot" style="background:#28c840"></span>traversal-order.txt · 深度优先遍历顺序</div>
+    <div class="cb-body"><span class="cm">// AST 结构:</span>
+        Program
+        /      \
+   Variable    Function
+   Declaration Declaration
+       |         /    \
+     <span class="kw">let</span>     Param   Body
+               |       |
+               x     <span class="kw">return</span> x
+
+<span class="cm">// Enter 顺序（进入节点时）:</span>
+Program → VariableDeclaration → <span class="kw">let</span> → FunctionDeclaration
+→ Param → x → Body → <span class="kw">return</span> → x
+
+<span class="cm">// Leave 顺序（离开节点时，逆序）:</span>
+x ← <span class="kw">return</span> ← Body ← x ← Param ← FunctionDeclaration
+← <span class="kw">let</span> ← VariableDeclaration ← Program</div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">visit() 回调</div>
+      <ul><li>按节点类型注册处理器</li><li>进入节点时调用</li><li>离开节点时调用（子节点已处理完）</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">Path 对象（Babel）</div>
+      <ul><li>包装节点，提供上下文（父节点、作用域）</li><li><code>replaceWith()</code> 替换节点</li><li><code>remove()</code> 删除节点</li><li><code>skip() / stop()</code> 控制遍历</li></ul>
+    </div>
+  </div>
+</section>
+
+<section class="layer-sec" id="s5">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c3d);color:#eddeff">2.5</span>
+    <h2 class="layer-title">跨语言 AST 对比<small>ESTree · Python ast · Go ast · syn</small></h2>
+  </div>
+
+  <table class="stab">
+    <thead><tr><th>语言/工具</th><th>AST 规范</th><th>节点类型数</th><th>特点</th></tr></thead>
+    <tbody>
+      <tr><td style="color:var(--c1);font-weight:600">ESTree (JS)</td><td>ES 规范驱动</td><td>~100+</td><td>ESLint、Prettier、Acorn 使用</td></tr>
+      <tr><td style="color:var(--c2);font-weight:600">Babel AST</td><td>ESTree 超集</td><td>~150+</td><td>实验性语法、JSX、TypeScript</td></tr>
+      <tr><td style="color:var(--c3);font-weight:600">TypeScript AST</td><td>自有规范</td><td>~200+</td><td>强类型、完整类型信息</td></tr>
+      <tr><td style="color:var(--c4);font-weight:600">Python AST</td><td>CPython 定义</td><td>~40+</td><td>简洁，标准库 <code>ast</code> 模块</td></tr>
+      <tr><td>Go AST</td><td>Go 标准库</td><td>~80+</td><td><code>go/ast</code>，强类型</td></tr>
+      <tr><td>Rust AST (syn)</td><td>proc_macro 生态</td><td>~100+</td><td>过程宏核心，零拷贝</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="layer-sec" id="s6">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c1d);color:#cae8ff">2.6</span>
+    <h2 class="layer-title">AST 核心应用<small>编译 · 格式化 · Linting · 安全</small></h2>
+  </div>
+
+  <table class="stab">
+    <thead><tr><th>应用</th><th>原理</th><th>工具</th></tr></thead>
+    <tbody>
+      <tr><td style="color:var(--c1);font-weight:600">代码转换</td><td>解析 AST → 遍历修改 → 代码生成</td><td>Babel, SWC, tsc</td></tr>
+      <tr><td style="color:var(--c2);font-weight:600">代码格式化</td><td>解析 AST → 丢弃原始空白 → 按规则重新生成</td><td>Prettier, Black, gofmt</td></tr>
+      <tr><td style="color:var(--c3);font-weight:600">Linting</td><td>遍历 AST → 检查规则 → 报告问题</td><td>ESLint, Pylint, Clippy</td></tr>
+      <tr><td style="color:var(--c4);font-weight:600">复杂度分析</td><td>遍历 AST → 统计分支节点</td><td>圈复杂度、认知复杂度</td></tr>
+      <tr><td>依赖分析</td><td>提取 ImportDeclaration → 构建依赖图</td><td>depcheck, madge</td></tr>
+      <tr><td>安全检测</td><td>检测危险模式（eval, innerHTML）</td><td>Semgrep, Bandit</td></tr>
+    </tbody>
+  </table>
+
+  <div class="card" style="margin-top:20px">
+    <div class="card-title">⚡ 高级主题：容错解析与增量解析</div>
+    <ul>
+      <li><strong>容错解析</strong>：tree-sitter 能处理不完整代码（IDE 场景），标记 ERROR 节点和 MISSING 部分</li>
+      <li><strong>增量解析</strong>：只重新解析修改部分，复用其余 AST。tree-sitter 核心创新</li>
+      <li><strong>Chomsky 层级</strong>：正则文法(Type 3) → Token 级，上下文无关文法(Type 2) → 语法级</li>
+    </ul>
+  </div>
+</section>
+
+<div class="tran-sec">
+  <div class="tran-inner">
+    <span class="tran-pill" style="background:var(--c3d);color:#eddeff">下一章预览</span>
+    <div class="tran-h">从 AST 到深度静态分析</div>
+    <div class="tran-p">AST 是静态分析的基石。下一章将深入数据流分析、符号执行、抽象解释等高级静态分析技术，揭示如何从代码中提取更深的语义属性。</div>
+    <div class="cta-row" style="margin-top:20px">
+      <a href="03-静态分析技术深度剖析.html" class="cta-btn cta-primary" style="background:var(--c3d);border-color:var(--c3d)">继续阅读第 3 章 →</a>
+      <a href="index.html" class="cta-btn cta-secondary">返回首页</a>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <p><a href="01-代码分析概述.html">← 第 1 章</a> · <a href="index.html">返回首页</a> · <a href="03-静态分析技术深度剖析.html">第 3 章 →</a></p>
+  <p style="margin-top:8px"><a href="https://github.com/1998x-stack/code-analysis-guide" style="color:var(--muted)">github.com/1998x-stack/code-analysis-guide</a></p>
+</div>
+
+</div>
+</body>
+</html>

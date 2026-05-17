@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>代码分析 · AST · 静态分析 — 深度技术指南</title>
+<link rel="stylesheet" href="assets/base-dark.css">
+<style>
+:root {
+  --c1:#58a6ff; --c1d:#1f6feb;
+  --c2:#3fb950; --c2d:#238636;
+  --c3:#d2a8ff; --c3d:#8250df;
+  --c4:#f0883e; --c4d:#d6680c;
+}
+.hero h1 em {
+  background:linear-gradient(135deg, var(--c1), var(--c3), var(--c2));
+}
+.chapter-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:32px;
+}
+@media (max-width:900px) { .chapter-grid { grid-template-columns:1fr; } }
+.chapter-card {
+  background:var(--bg2); border:1px solid var(--border); border-radius:14px;
+  padding:28px 24px; transition:border-color .2s,transform .15s,background .15s;
+  display:block; color:inherit; text-decoration:none;
+}
+.chapter-card:hover {
+  border-color:var(--border2); background:var(--bg3); transform:translateY(-3px);
+}
+.ch-num {
+  font-size:11px; font-weight:700; letter-spacing:.08em;
+  margin-bottom:10px; display:inline-block; padding:2px 10px; border-radius:6px;
+}
+.ch-title { font-size:20px; font-weight:700; margin-bottom:10px; line-height:1.3; }
+.ch-desc { font-size:13px; color:var(--muted); line-height:1.7; }
+.ch-desc strong { color:var(--text); font-weight:500; }
+.toc-section { padding:64px 0; border-bottom:1px solid var(--border); }
+.cta-row { display:flex; gap:12px; flex-wrap:wrap; margin-top:28px; }
+.cta-btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:10px 22px; border-radius:8px; font-size:14px; font-weight:600;
+  border:1px solid; transition:all .15s; text-decoration:none;
+}
+.cta-primary {
+  background:var(--c1d); color:#fff; border-color:var(--c1d);
+}
+.cta-primary:hover { background:var(--c1); }
+.cta-secondary {
+  background:transparent; color:var(--text); border-color:var(--border2);
+}
+.cta-secondary:hover { background:var(--bg3); }
+.intro-sec { padding:64px 0; border-bottom:1px solid var(--border); }
+.intro-sec h2 { font-size:24px; font-weight:700; margin-bottom:24px; }
+.intro-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+@media (max-width:900px) { .intro-grid { grid-template-columns:1fr; } }
+.intro-card {
+  background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+  padding:22px 18px;
+}
+.intro-card h3 { font-size:15px; font-weight:600; margin-bottom:10px; }
+.intro-card p { font-size:13px; color:var(--muted); line-height:1.7; }
+.intro-icon { font-size:28px; margin-bottom:12px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <span class="nav-brand">📖 代码分析指南 <span>· Code Analysis Guide</span></span>
+    <a class="nl" href="#toc">目录</a>
+    <a class="nl" href="#intro">概述</a>
+    <a class="nl" href="https://github.com/1998x-stack/code-analysis-guide">GitHub</a>
+  </div>
+</nav>
+
+<div class="page">
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-badge"><span class="dot"></span>2025 · 深度技术文档</div>
+  <h1>代码分析 · AST ·<br><em>静态分析</em></h1>
+  <p>从编译原理到工程实践，系统掌握代码分析、抽象语法树（AST）与静态分析的核心技术。覆盖词法/语法分析、数据流分析、符号执行、抽象解释等高级主题，包含 JavaScript / TypeScript / Python 等语言的实战代码示例。</p>
+  <div class="tag-row">
+    <span class="ltag" style="color:var(--c1);border-color:rgba(88,166,255,.3);background:rgba(88,166,255,.08)">Compiler Theory</span>
+    <span class="ltag" style="color:var(--c2);border-color:rgba(63,185,80,.3);background:rgba(63,185,80,.08)">AST</span>
+    <span class="ltag" style="color:var(--c3);border-color:rgba(210,168,255,.3);background:rgba(210,168,255,.08)">Static Analysis</span>
+    <span class="ltag" style="color:var(--c4);border-color:rgba(240,136,62,.3);background:rgba(240,136,62,.08)">Security</span>
+  </div>
+  <div class="cta-row">
+    <a href="01-代码分析概述.html" class="cta-btn cta-primary">开始阅读 →</a>
+    <a href="https://github.com/1998x-stack/code-analysis-guide" class="cta-btn cta-secondary">GitHub 仓库</a>
+  </div>
+</section>
+
+<!-- Intro Section -->
+<section class="intro-sec" id="intro">
+  <h2>为什么需要掌握代码分析？</h2>
+  <div class="intro-grid">
+    <div class="intro-card">
+      <div class="intro-icon">🔍</div>
+      <h3>发现隐藏缺陷</h3>
+      <p>静态分析可以在代码运行前找出潜在 bug——空指针、内存泄漏、竞态条件——在它们进入生产环境之前。</p>
+    </div>
+    <div class="intro-card">
+      <div class="intro-icon">🛡️</div>
+      <h3>安全审计</h3>
+      <p>自动检测 SQL 注入、XSS、敏感信息泄露等安全漏洞，将安全左移（Shift Left）到开发阶段。</p>
+    </div>
+    <div class="intro-card">
+      <div class="intro-icon">⚡</div>
+      <h3>理解复杂代码</h3>
+      <p>生成依赖关系图、调用链分析、影响面评估——帮助开发者快速理解陌生的大型代码库。</p>
+    </div>
+  </div>
+</section>
+
+<!-- TOC -->
+<section class="toc-section" id="toc">
+  <div class="sec-label">Table of Contents</div>
+  <div class="chapter-grid">
+    <a href="01-代码分析概述.html" class="chapter-card">
+      <span class="ch-num" style="background:var(--c1d);color:#cae8ff">CHAPTER 1</span>
+      <div class="ch-title">代码分析概述</div>
+      <div class="ch-desc">
+        <strong>动态 vs 静态分析</strong> · 分析层次（词法→AST→IR→二进制）· 应用场景全景 · 静态分析的完备性-精确性权衡 · Rice 定理与理论局限
+      </div>
+    </a>
+    <a href="02-AST抽象语法树详解.html" class="chapter-card">
+      <span class="ch-num" style="background:var(--c2d);color:#d2f0d0">CHAPTER 2</span>
+      <div class="ch-title">AST 抽象语法树详解</div>
+      <div class="ch-desc">
+        <strong>词法/语法分析算法</strong> · Visitor 遍历模式 · ESTree/Babel/Python/Go AST 跨语言对比 · 容错解析与增量解析 · AST 应用全景
+      </div>
+    </a>
+    <a href="03-静态分析技术深度剖析.html" class="chapter-card">
+      <span class="ch-num" style="background:var(--c3d);color:#eddeff">CHAPTER 3</span>
+      <div class="ch-title">静态分析技术深度剖析</div>
+      <div class="ch-desc">
+        <strong>数据流分析（DFA）</strong> · 控制流图（CFG）与支配树 · 符号执行与 SMT Solver · 抽象解释 · 污点分析 · 程序切片 · 类型系统的证明论
+      </div>
+    </a>
+    <a href="04-工具与实践.html" class="chapter-card">
+      <span class="ch-num" style="background:var(--c4d);color:#ffe2cc">CHAPTER 4</span>
+      <div class="ch-title">工具与实践</div>
+      <div class="ch-desc">
+        <strong>50+ 工具矩阵对比</strong> · CI/CD 分层质量门禁 · ESLint/Semgrep/CodeQL 实战规则 · tree-sitter 分析器构建 · TypeScript Compiler API 深度应用
+      </div>
+    </a>
+  </div>
+</section>
+
+<!-- Footer -->
+<div class="footer">
+  <p>Built with ❤️ · <a href="https://github.com/1998x-stack/code-analysis-guide" style="color:var(--muted)">github.com/1998x-stack/code-analysis-guide</a></p>
+  <p style="margin-top:8px">License: MIT · Made for developers who want to understand code deeply</p>
+</div>
+
+</div>
+
+</body>
+</html>

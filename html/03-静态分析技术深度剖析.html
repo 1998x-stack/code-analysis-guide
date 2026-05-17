@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 3 章：静态分析技术深度剖析 — 深度技术指南</title>
+<link rel="stylesheet" href="assets/base-dark.css">
+<style>
+:root {
+  --c1:#58a6ff; --c1d:#1f6feb;
+  --c2:#3fb950; --c2d:#238636;
+  --c3:#d2a8ff; --c3d:#8250df;
+  --c4:#f0883e; --c4d:#d6680c;
+  --c5:#f85149;
+}
+.hero h1 em { background:linear-gradient(135deg, var(--c3), var(--c1)); }
+.math { font-family:var(--mono); color:var(--muted); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="nav-brand" href="index.html">📖 代码分析指南 <span>· Code Analysis Guide</span></a>
+    <a class="nl" href="index.html">← 首页</a>
+    <a class="nl" href="#s1">数据流</a>
+    <a class="nl" href="#s2">控制流</a>
+    <a class="nl" href="#s3">类型系统</a>
+    <a class="nl" href="#s4">符号执行</a>
+    <a class="nl" href="#s5">抽象解释</a>
+    <a class="nl" href="#s6">污点分析</a>
+  </div>
+</nav>
+
+<div class="page">
+
+<section class="hero">
+  <div class="hero-badge"><span class="dot"></span>Chapter 3 · 高级技术</div>
+  <h1>第 3 章<br><em>静态分析技术深度剖析</em></h1>
+  <p>超越 AST 模式匹配——深入数据流分析的格理论、符号执行的路径约束求解、抽象解释的不动点计算。理解 Rice 定理如何定义静态分析的边界，以及工业界如何在完备性与精确性之间做出工程权衡。</p>
+  <div class="tag-row">
+    <span class="ltag" style="color:var(--c1);border-color:rgba(88,166,255,.3);background:rgba(88,166,255,.08)">Data Flow</span>
+    <span class="ltag" style="color:var(--c2);border-color:rgba(63,185,80,.3);background:rgba(63,185,80,.08)">Symbolic Execution</span>
+    <span class="ltag" style="color:var(--c3);border-color:rgba(210,168,255,.3);background:rgba(210,168,255,.08)">Abstract Interpretation</span>
+  </div>
+</section>
+
+<div class="flow">
+  <div class="sec-label">Static Analysis Technology Stack</div>
+  <div class="flow-track">
+    <div class="flow-box" style="border-color:rgba(240,136,62,.25)">
+      <div class="fb-tag" style="color:var(--c4)">Layer 0</div>
+      <div class="fb-name">AST + 类型检查</div>
+      <div class="fb-sub">基础层：模式匹配、类型检查</div>
+      <div class="fb-file">ESLint, tsc, Mypy, Rust Analyzer</div>
+    </div>
+    <div class="flow-arrow"><span class="arr-icon">→</span><span class="arr-text">基础</span></div>
+    <div class="flow-box" style="border-color:rgba(88,166,255,.25)">
+      <div class="fb-tag" style="color:var(--c1)">Layer 1</div>
+      <div class="fb-name">数据流 / 控制流</div>
+      <div class="fb-sub">格理论 · 不动点迭代 · CFG · 支配树</div>
+      <div class="fb-file">Soot, WALA, CodeQL</div>
+    </div>
+    <div class="flow-arrow"><span class="arr-icon">→</span><span class="arr-text">中级</span></div>
+    <div class="flow-box" style="border-color:rgba(210,168,255,.25)">
+      <div class="fb-tag" style="color:var(--c3)">Layer 2</div>
+      <div class="fb-name">符号执行</div>
+      <div class="fb-sub">符号值替代具体值 · SMT 约束求解</div>
+      <div class="fb-file">KLEE, angr, Manticore</div>
+    </div>
+    <div class="flow-arrow"><span class="arr-icon">→</span><span class="arr-text">高级</span></div>
+    <div class="flow-box" style="border-color:rgba(63,185,80,.25)">
+      <div class="fb-tag" style="color:var(--c2)">Layer 3-4</div>
+      <div class="fb-name">抽象解释 + 模型检查</div>
+      <div class="fb-sub">抽象域不动点 · 时序逻辑验证</div>
+      <div class="fb-file">Astrée, Infer, SPIN, TLA+</div>
+    </div>
+  </div>
+</div>
+
+<section class="layer-sec" id="s1">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c1d);color:#cae8ff">3.1</span>
+    <h2 class="layer-title">数据流分析 (DFA)<small>格理论与不动点</small></h2>
+  </div>
+  <p class="layer-def" style="border-color:var(--c1)">
+    数据流分析是一种基于控制流图的编译时分析技术，追踪数据值如何在程序中传播。其数学基础是<strong>格理论（Lattice Theory）</strong>，分析过程本质上是<strong>在格上计算不动点</strong>。
+  </p>
+
+  <div class="codeblock">
+    <div class="cb-head"><span class="cb-dot" style="background:#f85149"></span><span class="cb-dot" style="background:#e3b341"></span><span class="cb-dot" style="background:#28c840"></span>dfa-equations.txt · 数据流分析基本方程</div>
+    <div class="cb-body"><span class="cm">// 对于程序中的每个程序点 n：</span>
+<span class="fn">OUT</span>[n] = <span class="fn">GEN</span>[n] <span class="kw">∪</span> (<span class="fn">IN</span>[n] <span class="kw">-</span> <span class="fn">KILL</span>[n])
+<span class="fn">IN</span>[n]  = ∪ <span class="kw">或</span> ∩ { <span class="fn">OUT</span>[m] | m 是 n 的前驱 }
+
+<span class="cm">// 其中：GEN[n]  = 基本块 n 生成的数据流事实</span>
+<span class="cm">//       KILL[n] = 基本块 n 消除的数据流事实</span>
+
+<span class="cm">// 不动点定理：在有限高度的格上，单调函数 f 的</span>
+<span class="cm">// 最小不动点可通过迭代计算：</span>
+<span class="cm">//   f⁰(⊥) ⊑ f¹(⊥) ⊑ ... ⊑ fⁿ(⊥) = fⁿ⁺¹(⊥)</span></div>
+  </div>
+
+  <table class="stab">
+    <thead><tr><th>分析类型</th><th>问题</th><th>应用</th></tr></thead>
+    <tbody>
+      <tr><td style="font-weight:600;color:var(--c1)">到达定值</td><td>哪些赋值可能到达某程序点？</td><td>未初始化变量检测、常量传播</td></tr>
+      <tr><td style="font-weight:600;color:var(--c2)">活跃变量</td><td>变量的值在未来是否会被使用？</td><td>寄存器分配、死代码消除</td></tr>
+      <tr><td style="font-weight:600;color:var(--c3)">可用表达式</td><td>表达式结果是否已被计算？</td><td>公共子表达式消除</td></tr>
+      <tr><td style="font-weight:600;color:var(--c4)">污点分析</td><td>用户输入会流向哪里？</td><td>SQL 注入检测、XSS 防护</td></tr>
+      <tr><td>常量传播</td><td>哪些变量在运行时总是常量？</td><td>编译优化、死代码消除</td></tr>
+    </tbody>
+  </table>
+
+  <div class="card" style="margin-top:20px">
+    <div class="card-title">🎯 格（Lattice）理论基础</div>
+    <ul>
+      <li><strong>完备格</strong>要求：偏序关系 (⊑)、最小上界 (⊔)、最大下界 (⊓)、顶元素(⊤)和底元素(⊥)</li>
+      <li>实例（到达定值）：格 = 所有定义的幂集，⊑ = ⊇（越精确越"小"），方向 = 前向</li>
+      <li><strong>IFDS 框架</strong>：过程间、有限幂集、分配性分析，复杂度 <span class="math">O(ED³)</span></li>
+    </ul>
+  </div>
+</section>
+
+<div class="tran-sec">
+  <div class="tran-inner">
+    <span class="tran-pill" style="background:var(--c1d);color:#cae8ff">3.1 → 3.2 · 关系</span>
+    <div class="tran-h">数据流分析依赖控制流图（CFG）</div>
+    <div class="tran-p">数据流分析建立在控制流图之上——CFG 定义了程序点的前后关系，为数据流方程提供了结构基础。</div>
+  </div>
+</div>
+
+<section class="layer-sec" id="s2">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c2d);color:#d2f0d0">3.2</span>
+    <h2 class="layer-title">控制流分析 (CFA)<small>CFG · 支配树 · 循环分析</small></h2>
+  </div>
+
+  <div class="codeblock">
+    <div class="cb-head"><span class="cb-dot" style="background:#f85149"></span><span class="cb-dot" style="background:#e3b341"></span><span class="cb-dot" style="background:#28c840"></span>cfg-example.txt · 控制流图示例</div>
+    <div class="cb-body"><span class="cm">// 源代码: for (let i=0; i&lt;n; i++) { sum += a[i]; } return sum;</span>
+        ┌──────────────┐
+        │   <span class="fn">Entry</span>      │
+        └──────┬───────┘
+               │
+        ┌──────▼───────┐
+        │  <span class="kw">i = 0</span>       │ ← <span class="cm">基本块 B1</span>
+        │  <span class="kw">sum = 0</span>     │
+        └──────┬───────┘
+               │
+        ┌──────▼───────┐
+        │  <span class="kw">if</span> i &lt; n    │ ← <span class="cm">基本块 B2</span>
+        └──┬────────┬──┘
+    <span class="kw">false</span> │        │ <span class="kw">true</span>
+           │        │
+    ┌──────▼───┐  ┌─▼──────────┐
+    │ <span class="kw">return</span>   │  │ sum += a[i] │ ← <span class="cm">B3</span>
+    │ sum      │  │ i++         │
+    └──────────┘  └──┬──────────┘
+                     │
+                     └──→ B2 <span class="cm">(循环回边)</span></div>
+  </div>
+
+  <div class="grid3">
+    <div class="card">
+      <div class="card-title">控制流图 (CFG)</div>
+      <ul><li>节点 = 基本块</li><li>边 = 可能控制转移</li><li>不可达代码检测</li><li>异常路径覆盖</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">支配树</div>
+      <ul><li>d 支配 n = 每条路径必经 d</li><li>循环识别（自然循环）</li><li>SSA 形式 φ 节点插入</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">循环分析</div>
+      <ul><li>可归约 vs 不可归约</li><li>循环嵌套树</li><li>循环优化（展开、交换）</li></ul>
+    </div>
+  </div>
+</section>
+
+<section class="layer-sec" id="s3">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c3d);color:#eddeff">3.3</span>
+    <h2 class="layer-title">类型系统与类型检查<small>Curry-Howard 同构</small></h2>
+  </div>
+
+  <p class="layer-def" style="border-color:var(--c3)">
+    <strong>Curry-Howard 同构</strong>："命题 = 类型，证明 = 程序"。类型检查本质上是<strong>保守的静态分析</strong>——它证明程序满足某种类型安全性。更强的类型系统 = 更强的逻辑 = 能证明更多性质。
+  </p>
+
+  <div class="codeblock">
+    <div class="cb-head"><span class="cb-dot" style="background:#f85149"></span><span class="cb-dot" style="background:#e3b341"></span><span class="cb-dot" style="background:#28c840"></span>variance-demo.ts · 协变与逆变</div>
+    <div class="cb-body"><span class="cm">// 协变 (Covariant):     A <: B  ⇒  C<A> <: C<B></span>
+<span class="cm">// 逆变 (Contravariant): A <: B  ⇒  C<B> <: C<A>  ← 反向！</span>
+<span class="cm">// 不变 (Invariant):     A <: B  ⇏  无子类型关系</span>
+
+<span class="kw">class</span> <span class="fn">Animal</span> { name: <span class="kw">string</span>; }
+<span class="kw">class</span> <span class="fn">Dog</span> <span class="kw">extends</span> <span class="fn">Animal</span> { breed: <span class="kw">string</span>; }
+
+<span class="cm">// 协变: Array<Dog> <: Array<Animal> ✓</span>
+<span class="kw">let</span> dogs: <span class="fn">Dog</span>[] = [<span class="kw">new</span> <span class="fn">Dog</span>()];
+<span class="kw">let</span> animals: <span class="fn">Animal</span>[] = dogs; <span class="cm">// ✅ OK</span>
+
+<span class="cm">// 逆变: Handler<Animal> <: Handler<Dog> ✓</span>
+<span class="kw">type</span> <span class="fn">Handler</span>&lt;T&gt; = (item: T) =&gt; <span class="kw">void</span>;
+<span class="kw">let</span> animalHandler: <span class="fn">Handler</span>&lt;<span class="fn">Animal</span>&gt; = (a) =&gt; {};
+<span class="kw">let</span> dogHandler: <span class="fn">Handler</span>&lt;<span class="fn">Dog</span>&gt; = animalHandler; <span class="cm">// ✅ OK</span></div>
+  </div>
+
+  <div class="card" style="margin-top:20px">
+    <div class="card-title">多态类型系统层次</div>
+    <ul>
+      <li><strong>参数多态</strong>：泛型 <span class="math">&lt;T&gt;(x: T) => T</span>，基于 System F</li>
+      <li><strong>子类型多态</strong>：继承 (Dog <: Animal)、结构化子类型 (TypeScript)</li>
+      <li><strong>特设多态</strong>：函数重载、Type Class (Haskell)、Trait (Rust)</li>
+    </ul>
+  </div>
+</section>
+
+<div class="tran-sec">
+  <div class="tran-inner">
+    <span class="tran-pill" style="background:var(--c2d);color:#d2f0d0">3.3 → 3.4 · 更深层分析</span>
+    <div class="tran-h">类型检查只能证明类型安全——符号执行能探索具体路径</div>
+    <div class="tran-p">类型系统是保守的（Approximate），而符号执行用符号值模拟每条路径的精确执行——代价是路径爆炸。</div>
+  </div>
+</div>
+
+<section class="layer-sec" id="s4">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c4d);color:#ffe2cc">3.4</span>
+    <h2 class="layer-title">符号执行 (Symbolic Execution)<small>SMT 约束求解</small></h2>
+  </div>
+  <p class="layer-def" style="border-color:var(--c4)">
+    用<strong>符号值</strong>（α, β, ...）代替具体值执行程序，为每条路径维护<strong>路径约束（Path Constraint）</strong>。遇到分支时 fork 出两条路径，最后用 <strong>SMT Solver</strong> 求解约束。
+  </p>
+
+  <div class="codeblock">
+    <div class="cb-head"><span class="cb-dot" style="background:#f85149"></span><span class="cb-dot" style="background:#e3b341"></span><span class="cb-dot" style="background:#28c840"></span>symbolic-execution.txt · 符号执行示例</div>
+    <div class="cb-body"><span class="cm">// 传统执行:              符号执行:</span>
+x = <span class="num">5</span>; y = <span class="num">3</span>; z = x + y;   x = α; y = β; z = α + β;
+<span class="cm">// → z = 8               // → 路径约束: true</span>
+
+<span class="kw">if</span> (x &gt; <span class="num">0</span>)                 <span class="kw">if</span> (x &gt; <span class="num">0</span>)
+    z = x + <span class="num">1</span>;                 z = x + <span class="num">1</span>;
+<span class="kw">else</span>                        <span class="kw">else</span>
+    z = x - <span class="num">1</span>;                 z = x - <span class="num">1</span>;
+<span class="cm">//                         路径1: α > 0,  z = α + 1
+//                         路径2: α ≤ 0,  z = α - 1</span></div>
+  </div>
+
+  <table class="stab">
+    <thead><tr><th>SMT Solver</th><th>开发者</th><th>特点</th></tr></thead>
+    <tbody>
+      <tr><td style="font-weight:600;color:var(--c1)">Z3</td><td>Microsoft</td><td>最流行，Python/OCaml/C++ API</td></tr>
+      <tr><td style="font-weight:600;color:var(--c2)">CVC5</td><td>Stanford/Iowa</td><td>高性能，SMT-COMP 冠军</td></tr>
+      <tr><td style="font-weight:600;color:var(--c3)">Yices 2</td><td>SRI</td><td>轻量高效</td></tr>
+      <tr><td style="font-weight:600;color:var(--c4)">Boolector</td><td>JKU Linz</td><td>位向量优化</td></tr>
+    </tbody>
+  </table>
+
+  <div class="card" style="margin-top:20px">
+    <div class="card-title">⚠️ 核心挑战：路径爆炸</div>
+    <ul><li>路径数量随分支呈指数增长</li><li>缓解：路径剪枝、状态合并、摘要、增量求解、组合式分析</li><li>搜索策略：BFS / DFS / 覆盖率引导 / 随机搜索</li></ul>
+  </div>
+</section>
+
+<section class="layer-sec" id="s5">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c2d);color:#d2f0d0">3.5</span>
+    <h2 class="layer-title">抽象解释<small>Abstract Interpretation</small></h2>
+  </div>
+  <p class="layer-def" style="border-color:var(--c2)">
+    在<strong>抽象域</strong>上计算程序语义的保守近似，通过不动点迭代获取全局性质。核心思想：<strong>用精度换可计算性</strong>——具体域 ℤ 映射到抽象域 {'-', '0', '+'}。
+  </p>
+
+  <table class="stab">
+    <thead><tr><th>抽象域</th><th>表示</th><th>应用</th></tr></thead>
+    <tbody>
+      <tr><td style="font-weight:600">符号域 (Sign)</td><td>{⊥, -, 0, +, ⊤}</td><td>除零检测</td></tr>
+      <tr><td style="font-weight:600">区间域 (Interval)</td><td>[a, b]</td><td>数组越界</td></tr>
+      <tr><td style="font-weight:600">同余域</td><td>a ≡ b (mod m)</td><td>地址对齐</td></tr>
+      <tr><td style="font-weight:600">八边形域 (Octagon)</td><td>±x ± y ≤ c</td><td>数值不变量</td></tr>
+      <tr><td style="font-weight:600">多面体域 (Polyhedra)</td><td>Σaᵢxᵢ ≤ c</td><td>任意线性不变量</td></tr>
+    </tbody>
+  </table>
+
+  <div class="card" style="margin-top:20px">
+    <div class="card-title">🏭 工业案例：Astrée 验证空客 A380 飞控软件</div>
+    <ul>
+      <li>分析对象：<strong>132,000</strong> 行 C 代码</li>
+      <li>抽象域：超过 50 个定制域</li>
+      <li>效果：<strong>零误报</strong>，证明无运行时错误（除零、溢出、数组越界、非法指针）</li>
+    </ul>
+  </div>
+</section>
+
+<section class="layer-sec" id="s6">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c1d);color:#cae8ff">3.6</span>
+    <h2 class="layer-title">污点分析与程序切片<small>Taint Analysis & Program Slicing</small></h2>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">🔬 污点分析</div>
+      <ul>
+        <li>追踪"不可信"数据如何在程序中传播</li>
+        <li><strong>污点源</strong>：req.body, document.cookie, file input</li>
+        <li><strong>污点汇</strong>：SQL 查询、命令执行、eval()、innerHTML</li>
+        <li><strong>传播规则</strong>：x = source → y = x + 1 → y 也被污染</li>
+        <li>显式污点（数据流）vs 隐式污点（控制流）</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">✂️ 程序切片</div>
+      <ul>
+        <li><strong>切片准则</strong>：(语句 s, 变量 v)</li>
+        <li><strong>后向切片</strong>：所有可能影响 s 处 v 值的语句</li>
+        <li><strong>前向切片</strong>：所有被 s 处 v 影响的语句</li>
+        <li>应用：调试定位、影响分析、程序理解</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="layer-sec">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c4d);color:#ffe2cc">3.7</span>
+    <h2 class="layer-title">技术对比总结</h2>
+  </div>
+
+  <table class="stab">
+    <thead><tr><th>技术</th><th>核心思路</th><th>精度</th><th>扩展性</th><th>代表工具</th></tr></thead>
+    <tbody>
+      <tr><td style="color:var(--c4)">AST 模式匹配</td><td>语法结构匹配</td><td>低</td><td class="impl">极高</td><td>ESLint, Semgrep</td></tr>
+      <tr><td style="color:var(--c1)">类型检查</td><td>类型相容性规则</td><td>中</td><td class="impl">高</td><td>tsc, Mypy</td></tr>
+      <tr><td style="color:var(--c2)">数据流分析</td><td>格上不动点迭代</td><td>中</td><td class="impl">高</td><td>CodeQL, Infer</td></tr>
+      <tr><td style="color:var(--c3)">符号执行</td><td>路径约束 SMT 求解</td><td>高</td><td style="color:var(--c5)">低</td><td>KLEE, angr</td></tr>
+      <tr><td style="color:var(--c4)">抽象解释</td><td>抽象域不动点</td><td>高(可调)</td><td>中</td><td>Astrée, IKOS</td></tr>
+      <tr><td style="color:var(--c1)">模型检查</td><td>状态空间探索</td><td>最高</td><td style="color:var(--c5)">最低</td><td>SPIN, TLA+</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<div class="tran-sec">
+  <div class="tran-inner">
+    <span class="tran-pill" style="background:var(--c4d);color:#ffe2cc">下一章预览</span>
+    <div class="tran-h">从理论到实践：工具对比与实战案例</div>
+    <div class="tran-p">掌握了静态分析的理论基础后，下一章将聚焦实战——50+ 工具矩阵对比、CI/CD 集成、自定义规则开发、以及 Google/Meta 的工业级实践。</div>
+    <div class="cta-row" style="margin-top:20px">
+      <a href="04-工具与实践.html" class="cta-btn cta-primary" style="background:var(--c4d);border-color:var(--c4d)">继续阅读第 4 章 →</a>
+      <a href="index.html" class="cta-btn cta-secondary">返回首页</a>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <p><a href="02-AST抽象语法树详解.html">← 第 2 章</a> · <a href="index.html">返回首页</a> · <a href="04-工具与实践.html">第 4 章 →</a></p>
+  <p style="margin-top:8px"><a href="https://github.com/1998x-stack/code-analysis-guide" style="color:var(--muted)">github.com/1998x-stack/code-analysis-guide</a></p>
+</div>
+
+</div>
+</body>
+</html>

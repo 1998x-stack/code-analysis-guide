@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第 1 章：代码分析概述 — 深度技术指南</title>
+<link rel="stylesheet" href="assets/base-dark.css">
+<style>
+:root {
+  --c1:#58a6ff; --c1d:#1f6feb;
+  --c2:#3fb950; --c2d:#238636;
+  --c3:#d2a8ff; --c3d:#8250df;
+  --c4:#f0883e; --c4d:#d6680c;
+}
+.hero h1 em {
+  background:linear-gradient(135deg, var(--c1), var(--c3));
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="nav-brand" href="index.html">📖 代码分析指南 <span>· Code Analysis Guide</span></a>
+    <a class="nl" href="index.html">← 首页</a>
+    <a class="nl" href="#s1">概念</a>
+    <a class="nl" href="#s2">分类</a>
+    <a class="nl" href="#s3">层次</a>
+    <a class="nl" href="#s4">能力矩阵</a>
+    <a class="nl" href="#s5">局限</a>
+  </div>
+</nav>
+
+<div class="page">
+
+<section class="hero">
+  <div class="hero-badge"><span class="dot"></span>Chapter 1 · 基础概念</div>
+  <h1>第 1 章<br><em>代码分析概述</em></h1>
+  <p>了解代码分析是什么、为什么需要它，以及静态分析与动态分析的核心区别。掌握从文本级到二进制级的分析层次，理解完备性与精确性的根本权衡。</p>
+  <div class="tag-row">
+    <span class="ltag" style="color:var(--c1);border-color:rgba(88,166,255,.3);background:rgba(88,166,255,.08)">Code Analysis</span>
+    <span class="ltag" style="color:var(--c2);border-color:rgba(63,185,80,.3);background:rgba(63,185,80,.08)">Static vs Dynamic</span>
+    <span class="ltag" style="color:var(--c3);border-color:rgba(210,168,255,.3);background:rgba(210,168,255,.08)">Soundness</span>
+  </div>
+</section>
+
+<div class="flow">
+  <div class="sec-label">Core Concepts Flow</div>
+  <div class="flow-track">
+    <div class="flow-box" style="border-color:rgba(88,166,255,.25)">
+      <div class="fb-tag" style="color:var(--c1)">定义</div>
+      <div class="fb-name">什么是代码分析？</div>
+      <div class="fb-sub">不执行或通过执行程序来检查、理解和验证程序行为的技术</div>
+      <div class="fb-file">目标：缺陷发现 · 代码质量 · 安全审计 · 性能优化</div>
+    </div>
+    <div class="flow-arrow">
+      <span class="arr-icon">→</span>
+      <span class="arr-text">分类</span>
+    </div>
+    <div class="flow-box" style="border-color:rgba(63,185,80,.25)">
+      <div class="fb-tag" style="color:var(--c2)">分类</div>
+      <div class="fb-name">静态 vs 动态</div>
+      <div class="fb-sub">静态：不运行程序，分析源码/字节码。动态：运行时收集信息。</div>
+      <div class="fb-file">核心权衡：完备性 ↔ 精确性</div>
+    </div>
+    <div class="flow-arrow">
+      <span class="arr-icon">→</span>
+      <span class="arr-text">层次</span>
+    </div>
+    <div class="flow-box" style="border-color:rgba(210,168,255,.25)">
+      <div class="fb-tag" style="color:var(--c3)">层次</div>
+      <div class="fb-name">分析层次</div>
+      <div class="fb-sub">文本 → AST → IR → 二进制。层次越高，信息越丰富。</div>
+      <div class="fb-file">grep → ESLint → Clang SA → Ghidra</div>
+    </div>
+    <div class="flow-arrow">
+      <span class="arr-icon">→</span>
+      <span class="arr-text">应用</span>
+    </div>
+    <div class="flow-box" style="border-color:rgba(240,136,62,.25)">
+      <div class="fb-tag" style="color:var(--c4)">应用</div>
+      <div class="fb-name">工业应用</div>
+      <div class="fb-sub">IDE 集成 · CI/CD 门禁 · 安全审计 · 大规模代码库管理</div>
+      <div class="fb-file">Google Tricorder: 50K+ PRs/day</div>
+    </div>
+  </div>
+</div>
+
+<section class="layer-sec" id="s1">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c1d);color:#cae8ff">1.1</span>
+    <h2 class="layer-title">什么是代码分析？<small>定义与目标</small></h2>
+  </div>
+  <p class="layer-def" style="border-color:var(--c1)">
+    <strong>代码分析（Code Analysis）</strong> 是指在不执行程序的情况下（静态分析）或通过执行程序（动态分析）来检查、理解和验证程序行为的一系列技术和方法。
+  </p>
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">🔍 缺陷发现</div>
+      <ul><li>代码运行前找出潜在 bug</li><li>空指针、内存泄漏、竞态条件</li><li>在进入生产环境前拦截</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">📏 代码质量</div>
+      <ul><li>维护可读性和一致性</li><li>命名规范、复杂度控制</li><li>死代码清理</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🛡️ 安全审计</div>
+      <ul><li>检测安全漏洞和攻击面</li><li>SQL 注入、XSS、敏感信息泄露</li><li>OWASP Top 10 合规</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">⚡ 性能优化</div>
+      <ul><li>识别性能瓶颈</li><li>热路径分析</li><li>内存分配热点</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">✅ 合规检查</div>
+      <ul><li>确保代码符合行业标准</li><li>MISRA C、GDPR</li><li>供应链安全</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🧠 理解重构</div>
+      <ul><li>帮助开发者理解代码结构</li><li>依赖关系图、调用链分析</li><li>影响面评估</li></ul>
+    </div>
+  </div>
+</section>
+
+<div class="tran-sec">
+  <div class="tran-inner">
+    <span class="tran-pill" style="background:var(--c1d);color:#cae8ff">1.1 → 1.2 · 核心分歧</span>
+    <div class="tran-h">静态分析 = 不运行程序。动态分析 = 运行时分析。</div>
+    <div class="tran-p">这是代码分析最根本的分类。两种方法各有优劣，现代工程实践通常将两者结合使用。</div>
+    <div class="gate">
+      <span class="gate-item gi-pass">√ 静态：覆盖所有代码路径</span>
+      <span class="gate-item gi-pass">√ 动态：误报率低，基于实际执行</span>
+      <span class="gate-item gi-fail">× 静态：存在误报和漏报</span>
+      <span class="gate-item gi-fail">× 动态：只能覆盖被执行路径</span>
+    </div>
+  </div>
+</div>
+
+<section class="layer-sec" id="s2">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c2d);color:#d2f0d0">1.2</span>
+    <h2 class="layer-title">静态分析 vs 动态分析<small>核心区别</small></h2>
+  </div>
+  <p class="layer-def" style="border-color:var(--c2)">
+    静态分析<strong>不运行程序</strong>，直接分析源代码或字节码。动态分析在<strong>程序运行时</strong>收集信息。两者的核心权衡在于：<strong>完备性（Soundness）vs 精确性（Precision）</strong>不可兼得。
+  </p>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">静态分析 (Static Analysis)</div>
+    <ul>
+      <li><strong>优点：</strong>覆盖所有代码路径（含冷路径/异常路径）、无需运行环境、CI/CD 友好、可提前发现缺陷</li>
+      <li><strong>缺点：</strong>存在误报（False Positive）和漏报（False Negative）、无法感知运行时状态（多态、反射、动态加载）</li>
+    </ul>
+  </div>
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title">动态分析 (Dynamic Analysis)</div>
+    <ul>
+      <li><strong>优点：</strong>误报率低（基于实际执行路径）、可发现运行时特定问题（内存泄漏、死锁、并发 bug）</li>
+      <li><strong>缺点：</strong>只能覆盖被执行的代码路径、需要运行环境和测试用例、性能开销大</li>
+    </ul>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="card-title">🎯 完备性（Soundness）←→ 精确性（Precision）</div>
+    <ul>
+      <li><strong>高完备性 + 低精确性</strong> = 大量误报（如 ESLint 全量规则）</li>
+      <li><strong>低完备性 + 高精确性</strong> = 可能漏报（简单模式匹配）</li>
+      <li><strong>平衡点</strong> = 工业级工具追求的目标</li>
+    </ul>
+  </div>
+</section>
+
+<div class="tran-sec">
+  <div class="tran-inner">
+    <span class="tran-pill" style="background:var(--c3d);color:#eddeff">1.2 → 1.3 · 分析层次</span>
+    <div class="tran-h">从文本匹配到二进制反编译 — 5 个分析层次</div>
+    <div class="tran-p">层次越高，信息越丰富，但分析成本和复杂度也越高。选择哪个层次取决于你的具体需求。</div>
+  </div>
+</div>
+
+<section class="layer-sec" id="s3">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c3d);color:#eddeff">1.3</span>
+    <h2 class="layer-title">分析层次<small>从文本到二进制</small></h2>
+  </div>
+
+  <div class="codeblock">
+    <div class="cb-head">
+      <span class="cb-dot" style="background:#f85149"></span>
+      <span class="cb-dot" style="background:#e3b341"></span>
+      <span class="cb-dot" style="background:#28c840"></span>
+      analysis-layers.txt · 分析层次全景
+    </div>
+    <div class="cb-body">源代码 ──→ AST 分析 ──→ IR 分析 ──→ 二进制分析
+  │            │           │            │
+  ├─ <span class="cm">文本级</span>     ├─ <span class="cm">语法级</span>    ├─ <span class="cm">中间表示级</span>  ├─ <span class="cm">机器码级</span>
+  ├─ grep      ├─ ESLint   ├─ LLVM IR   ├─ objdump
+  ├─ regex     ├─ Prettier ├─ Clang SA  ├─ Ghidra
+  └─ <span class="cm">简单匹配</span>   └─ ast-grep └─ Soufflé   └─ Binary Ninja</div>
+  </div>
+
+  <table class="stab">
+    <thead>
+      <tr><th>分析层次</th><th>分析对象</th><th>信息丰富度</th><th>典型工具</th></tr>
+    </thead>
+    <tbody>
+      <tr><td style="font-weight:600">词法/文本级</td><td>Token 流、正则匹配</td><td style="color:var(--c4)">低</td><td>grep, sed, Semgrep (部分)</td></tr>
+      <tr><td style="font-weight:600">语法级 (AST)</td><td>抽象语法树</td><td style="color:var(--c4)">中</td><td>ESLint, Prettier, Babel, ast-grep</td></tr>
+      <tr><td style="font-weight:600">语义级</td><td>类型信息、符号表、CFG</td><td style="color:var(--c2)">高</td><td>TypeScript Compiler, Clang SA</td></tr>
+      <tr><td style="font-weight:600">IR 级</td><td>中间表示（LLVM IR）</td><td style="color:var(--c2)">很高</td><td>Clang Static Analyzer, Soot</td></tr>
+      <tr><td style="font-weight:600">二进制级</td><td>汇编、机器码</td><td style="color:var(--c1)">最高</td><td>Ghidra, IDA Pro, Binary Ninja</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="layer-sec" id="s4">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c4d);color:#ffe2cc">1.4</span>
+    <h2 class="layer-title">静态分析核心能力矩阵<small>基于 AST 的分析</small></h2>
+  </div>
+
+  <div class="codeblock">
+    <div class="cb-head">
+      <span class="cb-dot" style="background:#f85149"></span>
+      <span class="cb-dot" style="background:#e3b341"></span>
+      <span class="cb-dot" style="background:#28c840"></span>
+      ast-analysis-demo.js · AST 分析流程
+    </div>
+    <div class="cb-body"><span class="cm">// 源代码</span>
+<span class="kw">if</span> (x = <span class="num">1</span>) { ... }
+        <span class="cm">↓ 词法分析</span>
+<span class="cm">// Tokens:</span> [<span class="kw">if</span>] [(] [x] [=] [<span class="num">1</span>] [)] [{] [...] [}]
+        <span class="cm">↓ 语法分析</span>
+<span class="cm">// AST:</span>    IfStatement
+<span class="cm">//</span>         ├── condition: AssignmentExpression
+<span class="cm">//</span>         │   ├── left: <span class="fn">Identifier</span>(<span class="str">"x"</span>)
+<span class="cm">//</span>         │   ├── operator: <span class="str">"="</span>
+<span class="cm">//</span>         │   └── right: <span class="fn">NumericLiteral</span>(<span class="num">1</span>)
+<span class="cm">//</span>         └── body: BlockStatement {...}
+        <span class="cm">↓ AST 遍历 → 规则检查</span>
+<span class="cm">// 结果:</span> ⚠️ 检测到条件语句中使用赋值 (=)，可能误用了比较 (==)</div>
+  </div>
+
+  <table class="stab">
+    <thead><tr><th>应用</th><th>说明</th><th>工具示例</th></tr></thead>
+    <tbody>
+      <tr><td style="font-weight:600;color:var(--c1)">Linting</td><td>检查代码风格和潜在错误</td><td>ESLint, Pylint, Clippy</td></tr>
+      <tr><td style="font-weight:600;color:var(--c2)">格式化</td><td>统一代码格式</td><td>Prettier, Black, gofmt</td></tr>
+      <tr><td style="font-weight:600;color:var(--c3)">代码转换</td><td>语法转换、polyfill、转译</td><td>Babel, SWC, tsc</td></tr>
+      <tr><td style="font-weight:600;color:var(--c4)">复杂度分析</td><td>圈复杂度、认知复杂度</td><td>ESLint complexity rule</td></tr>
+      <tr><td>依赖分析</td><td>模块依赖、循环依赖检测</td><td>depcheck, madge</td></tr>
+      <tr><td>重构辅助</td><td>安全重命名、提取函数</td><td>IDE 重构功能</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="layer-sec" id="s5">
+  <div class="layer-hdr">
+    <span class="layer-id-badge" style="background:var(--c1d);color:#cae8ff">1.5</span>
+    <h2 class="layer-title">静态分析的局限性<small>理论边界</small></h2>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title">⚠️ Rice 定理 — 不可判定的根本原因</div>
+    <ul><li><strong>程序的任何非平凡语义性质都是不可判定的。</strong></li><li>这意味着任何静态分析都无法同时做到完备（不漏报）和完整（不误报）。</li><li>工业界策略：编译器优化偏重完备性，Bug 检测偏重完整性，安全关键系统偏重完备性。</li></ul>
+  </div>
+
+  <table class="stab">
+    <thead><tr><th>局限</th><th>说明</th><th>缓解措施</th></tr></thead>
+    <tbody>
+      <tr><td style="font-weight:600">Rice 定理</td><td>非平凡性质不可判定</td><td>接受不完备性，做近似分析</td></tr>
+      <tr><td style="font-weight:600">误报/漏报</td><td>完备性与精确性不可兼得</td><td>用户反馈机制、基线抑制</td></tr>
+      <tr><td style="font-weight:600">路径爆炸</td><td>路径数随分支指数增长</td><td>摘要分析、函数摘要</td></tr>
+      <tr><td style="font-weight:600">动态特性</td><td>反射、动态加载难以静态分析</td><td>混合动态分析</td></tr>
+      <tr><td style="font-weight:600">跨语言</td><td>多语言项目难以统一分析</td><td>tree-sitter 统一解析</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<div class="tran-sec">
+  <div class="tran-inner">
+    <span class="tran-pill" style="background:var(--c2d);color:#d2f0d0">下一章预览</span>
+    <div class="tran-h">从理论到实践：深入 AST 抽象语法树</div>
+    <div class="tran-p">了解代码分析的基本概念后，下一章将深入 AST 的内部机制——词法分析、语法分析算法、Visitor 模式、以及跨语言的 AST 对比。</div>
+    <div class="cta-row" style="margin-top:20px">
+      <a href="02-AST抽象语法树详解.html" class="cta-btn cta-primary" style="background:var(--c2d);border-color:var(--c2d)">继续阅读第 2 章 →</a>
+      <a href="index.html" class="cta-btn cta-secondary">返回首页</a>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <p><a href="index.html">← 返回首页</a> · <a href="02-AST抽象语法树详解.html">第 2 章：AST 抽象语法树详解 →</a></p>
+  <p style="margin-top:8px"><a href="https://github.com/1998x-stack/code-analysis-guide" style="color:var(--muted)">github.com/1998x-stack/code-analysis-guide</a></p>
+</div>
+
+</div>
+</body>
+</html>
